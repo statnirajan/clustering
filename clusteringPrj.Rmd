@@ -1,0 +1,226 @@
+---
+title: "Clustering of US States based on some COVID Measures"
+author: "Nirajan Budhathoki"
+date: "10/20/2021"
+output:
+  html_document: default
+  word_document: default
+---
+## Cluster Analysis
+Cluster analysis is a technique that groups large number of cases (observations) into small number of clusters based on a set of measurements collected from each observations. Cluster analysis can also be applied to variables as a tool for data reduction, such as choosing the best variables or cluster components for analysis. However, in this study, we talk about clustering cases.
+
+Cluster analysis is classified as an unsupervised learning technique in machine learning. This is because, unlike supervised learning, there is no target variable in the data. Many applications of cluster analysis exist. For example, in business applications, cluster analysis can be used to understand customer groups for marketing purposes. With gene expression data, clustering can be used to understand the natural structure inherent in the data.
+
+Approaches to clustering technique can be categorized into three broad categories:  
+
+**1. Hierarchical methods:** Two types of hierarchical methods exist:  
+The *agglomerative hierarchical method* is a "bottom-up" approach which starts by defining each observations a cluster. Then, the two closest clusters, measured using some distance measure are combined into a new cluster. In each subsequent step, two existing clusters are merged into a single cluster.  
+
+The *divisive hierarchical method* is a "top-down" approach in which all observations start in one cluster. Then, the initial cluster is divided into two clusters. In each subsequent step, the existing cluster is divided into two clusters.
+  
+**2. Non-hierarchical methods:** Under non-hierarchical methods, observations are initially partitioned into a set of k clusters. This number k has to be pre-specified by the user and may be based on the existing domain knowledge or output from some algorithm. Initially, the assignment of observations into clusters may be random. In subsequent steps, the observations are iteratively moved into different clusters until there is no meaningful reassignment possible.
+
+**3. Model based methods:** These are statistical approach to clustering. Under these methods, the observed multivariate data is assumed to have been generated from a finite mixture of component models. Each component model is a probability distribution, typically a multivariate distribution. For instance, in a multivariate Gaussian mixture model, each component is a multivariate Gaussian distribution. The clustering algorithm provides a partition of the dataset that maximizes the likelihood function as defined by the mixture model.
+
+## The Data
+In this study we hope to group the 50 US states into clusters that share similar figures in terms of the attributes considered. Data has been taken from CDC website and consists three variables: (i) Number of cases per 100,000 population (ii) Number of deaths per 100,000 population, and (iii) Vaccination rate.
+Figures in data are cumulative counts for nearly 21 months: from January 21, 2020 to October 15, 2021. Prior to clustering, let's visualize our data with some plots.
+
+1. Cases per 100,000 population Vs Deaths per 100,000 population
+```{r message=FALSE, warning=FALSE}
+# Read in the data
+library(ggplot2)
+setwd("U:/COVID")
+df = read.csv('coviddata1.csv')
+head(df)
+summary(df[,2:4])
+ggplot(data = df,mapping = aes(x = Cases, y = Deaths))+
+  geom_point() +
+  ggtitle("Plot of Deaths vs Cases") +
+  xlab("Cases per 100,000 Population") + ylab("Deaths per 100,000 Population")
+```
+
+It seems that the number of deaths increased only until a certain number of cases. For cases around 12,000 per 100,000 population and above, the relation does not look obvious.
+
+2. Cases per 100,000 population Vs Vaccination Rate
+```{r}
+ggplot(data = df, mapping = aes(x = Cases, y = Vaccinated))+
+  geom_point() +
+  ggtitle("Cases vs Vaccination Rate") +
+  xlab("Cases per 100,000 Population") + ylab("Percentage of Vaccinated Population")
+```
+
+The relationship between vaccination rate and number of cases seems negative. States with low cases have high rate of vaccination. This may also be the other way around: States with high rate of vaccination have low number of cases.
+
+
+3. Deaths per 100,000 population Vs Vaccination Rate
+```{r}
+ggplot(data = df,mapping = aes(x = Deaths, y = Vaccinated))+
+  geom_point() +
+  ggtitle("Plot of Deaths vs Vaccination Rate") +
+  xlab("Deaths per 100,000 Population") + ylab("Percentage of Vaccinated Population")
+```
+
+There is no obvious linear relationship between deaths and vaccination rate. Some states with low death rates have high vaccination rate while the other with high death rates have lower vaccination rates.
+
+## Clustering Approach in this Study
+This study uses the most popular method called K-means clustering that falls under non-hierarchical method to cluster US states based on three important COVID measures.
+
+### K-means clustering
+This method involves a partitioning approach that begins with random partition of observations into pre-defined number of clusters, k. An alternative to this random partition exists which requires starting with an additional set of starting points to form the clusters' centers. Clustering takes place such that objects within the same clusters are as similar as possible (i.e.high intra-class similarity), whereas objects from different clusters are as dissimilar as possible (i.e.low inter-class similarity). The random partition approach works in the following way:  
+  (i) A number from 1 to k is randomly assigned to each observations in the dataset. This serves as initial cluster assignment.  
+  (ii) Iterate until the cluster assignment stop changing:  
+      (a) For each of the k clusters, the cluster centroid is computed. The k^th^ cluster centroid is the vector of p variables means for the observations in the k^th^ cluster.  
+      (b) Each observation should be assigned to the cluster whose centroid is closest (where closest may be defined using some distance measures such as the           Euclidean distance).  
+
+Domain knowledge may play an important role in deciding the number of clusters, k. Moreover, there are techniques which can help decide this number. We see some of these techniques in our dataset.
+
+**1. Elbow Method**  
+In this method, K-means clustering is performed with varying values of k (say 1 to 15). For each k, the total within-cluster sum of squares (WSS), also called within-cluster variation, is calculated. WSS measures total variation within clusters and we want to keep it at a minimum. It is given by the sum of squared distance between each point and the centroid in the cluster.
+Consider n observations have been grouped into g clusters based on p variables and each cluster consists of n~k~ cases such that $$\sum_{k=1}^{g} n_{k} = n$$
+Let $\overline{x}_{sk}$ be the mean of the $k^{th}$ cluster for the $x_{s}$ variable, s = 1,2,..p. The within-cluster sum of squares for the kth cluster is given by;
+ $$
+ W_k =  \sum_{s=1}^{p}\sum_{i=1}^{n_k}(x_{is}- \overline{x}_{sk})^2
+ $$
+
+The total within-cluster sum of squares of g clusters is given by,
+ $$
+ W =  \sum_{k=1}^{g}W_k
+ $$
+
+We plot WSS for various K values and locate the bend (elbow-shape) to get an idea of the appropriate number of clusters. This bend is the position at which WSS rapidly decreases and beyond which the decrease is not noteworthy.
+
+To demonstrate in R, let's begin with scaling the data so all variables are measured around same unit.
+
+```{r}
+rownames(df) = df$State
+newdf = df[,2:4]
+# Scale the data
+scaled.df = scale(newdf)
+head(scaled.df)
+```
+
+```{r}
+set.seed(123)
+wss = numeric()
+
+# Run k means algorithm for different values of k.
+for (k in 1:10){
+  wss[k] = kmeans(scaled.df, centers = k, nstart = 25 )$tot.withinss
+}
+
+# nstart = 25 option generates 25 initial configurations and the best one is reported.
+
+plot(1:10, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters, K",
+     ylab="Total within-clusters sum of squares (WSS)")
+```
+
+It seems that 4 would be an appropriate number since it is at the bend in the plot. We see this further with other methods.
+
+**2. Average Silhouette Method**  
+The method is based on a measure of the quality of clustering. The silhouette value, denoted s(i), for each observation i, measures how similar an observation is to its own cluster (cohesion) compared to other clusters (separation). This value ranges from -1 to +1, where a high value indicates that the object is well matched to its own cluster and poorly matched to neighboring cluster. The method works in the following way:
+For each observation i, first the average distance between i and all other observations in the same cluster is calculated. This is called measure of cohesion (say, a). Next, the average distance between i and all points in the nearest cluster is calculated. This is called measure of separation (say, b). The silhouette coefficient for $i^{th}$ observation is then,
+ $$
+ s(i) =  \frac{b(i)-a(i)}{max(b(i)-a(i))}
+ $$
+
+The average silhouette method calculates average s(i) for different values of k that are pre-specified. The optimal k is the one for which average silhouette is maximum.
+
+```{r message=FALSE, warning=FALSE}
+library(cluster)
+# function to compute average silhouette for k clusters
+sil_score <- function(k) {
+  km <- kmeans(scaled.df, centers = k, nstart = 25)
+  ss <- silhouette(km$cluster, dist(scaled.df))
+  mean(ss[, 3])
+}
+# Choose k from 2 to 10
+k <- 2:10
+
+# extract avg silhouette for 2-10 clusters
+avg_sil <- sapply(k,sil_score)
+
+plot(k, avg_sil,
+     type = "b", pch = 19, frame = FALSE, 
+     xlab = "Number of clusters, K",
+     ylab = "Average Silhouettes")
+```
+
+The plot shows that the average silhouttes is maximized for 2 clusters followed by 3 and 4. We will see what the third method suggests.
+
+**3. Gap Statistic Method**  
+This method involves comparing the total within-cluster variation for different values of k with their expected values under null reference distribution of the data (i.e. a distribution with no obvious clustering). As a reference dataset, for each variable we sample points uniformly in its range using Monte Carlo simulations. The gap statistic for a particular k is given by,
+
+$$Gap_n(k) = E^*_n(log(W_k))-log(W_k)$$
+
+
+
+Where $E^*_n$ denotes expectation under a sample of size n from the reference distribution. $W_k$ is the pooled within cluster sum of squares around the cluster means. The optimal value of k will be the one maximizing $Gap_n(k)$.
+
+```{r message=FALSE, warning=FALSE}
+set.seed(123)
+gap_stat <- clusGap(scaled.df, FUN = kmeans, nstart = 25, K.max = 10, B=50) # B is the number of Monte Carlo ("bootstrap") samples
+
+# Print the result
+print(gap_stat, method = "firstmax")
+
+# visualize the result
+library(factoextra)
+fviz_gap_stat(gap_stat)
+```
+
+The gap statistic is high at K=4. Although it has higher values at K= 8,9 and 10, considering the size of data and results from previous two methods, it seems reasonable to conclude that K = 4 is the choice for optimal number of clusters. Finally, we run the K-means clustering with K = 4.
+
+```{r}
+set.seed(123)
+final.res <- kmeans(scaled.df, centers = 4, nstart = 25)
+
+# The cluster element gives the cluster labels for each of the n observations.
+print(final.res$cluster)
+
+# fviz_cluster is for visualizing clustering results using principal components. 
+fviz_cluster(final.res, data = scaled.df)
+```
+
+We can see the average values of the features in terms of original data (prior to scaling) for the four clusters obtained.
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+newdf %>%
+  group_by(Cluster = final.res$cluster) %>%
+  summarise_all("mean")
+```
+
+Four clusters have been identified in terms of the chosen COVID measures. States in Cluster 1 have the lowest number of average cases and deaths per 100,000 population where the average vaccination rate is close to that of highest vaccinated cluster: cluster 4.  Cluster 2 contains states with second-most highest average cases and a relatively lower deaths than Cluster 3 and 4. The vaccination rate, on the other hand, is lower than the rates in Cluster 1 and 4. Cluster 3 happens to have the highest number of cases, relatively higher number of deaths and is the lowest vaccinated cluster among the four. Cluster 4 includes states with highest number of average deaths and also has the highest average vaccination rate.
+
+## Final Comments
+K-means clustering is a simple and elegant approach to clustering that is suitable for extremely large data sets. Unlike hierarchical and model based clustering approaches, this approach is not computationally intensive. However, there are some disadvantages associated. K-Means clustering requires K to be chosen manually by the user. We discussed that in absence of the domain knowledge, there are methods to help us but sometimes it may be difficult to reach to a consensus based on the output of those methods. Another disadvantage is that the K-means clustering results depend on the initial random assignment of clusters to observations. This means that the final results may not be reproducible unless you set a seed while running algorithm. Finally, since the approach is based on centroids, outliers can drag the centroids. This may be dealt by treating outliers prior to clustering or using other approaches such as K-Medoids Clustering.,
+
+
+
+## References and Links
+
+[1] Discussion of Clustering Methods https://online.stat.psu.edu/stat505/lesson/14
+
+[2] Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani. (2013). An Introduction to Statistical Learning : With Applications in R. New York : Springer.
+
+[3] UC Business Analytics R Programming Guide https://uc-r.github.io/kmeans_clustering
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
